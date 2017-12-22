@@ -13,24 +13,24 @@
 #include <bf706_device.h>
 #include "scheduler.h"
 
-#define save_context_no_interrupts \
+#define SAVE_CONTEXT \
 	[--sp] = ( R7:0, P5:0 ); \
- \
+	\
 	[--sp] = i0; \
 	[--sp] = i1; \
 	[--sp] = i2; \
 	[--sp] = i3; \
- \
+	\
 	[--sp] = m0; \
 	[--sp] = m1; \
 	[--sp] = m2; \
 	[--sp] = m3; \
- \
+	\
 	[--sp] = l0; \
 	[--sp] = l1; \
 	[--sp] = l2; \
 	[--sp] = l3; \
- \
+	\
 	[--sp] = b0; \
 	[--sp] = b1; \
 	[--sp] = b2; \
@@ -39,20 +39,19 @@
 	[--sp] = a0.w; \
 	[--sp] = a1.x; \
 	[--sp] = a1.w; \
- \
+	\
 	[--sp] = LC0; \
 	[--sp] = LC1; \
 	[--sp] = LT0; \
 	[--sp] = LT1; \
 	[--sp] = LB0; \
 	[--sp] = LB1; \
- \
+	\
 	[--sp] = ASTAT; \
- \
 	[--sp] = SEQSTAT; \
-	[--sp] = SYSCFG;
+	[--sp] = SYSCFG
 
-#define restore_context_no_interrupts \
+#define RESTORE_CONTEXT \
 	SYSCFG = [sp++]; \
 	SEQSTAT = [sp++]; \
 	ASTAT = [sp++]; \
@@ -88,7 +87,7 @@
 	i1 = [sp++]; \
 	i0 = [sp++]; \
 	 \
-	( R7 : 0, P5 : 0) = [ SP ++ ];
+	( R7 : 0, P5 : 0) = [ SP ++ ]
 
 .global ___clzsi2;
 
@@ -100,7 +99,9 @@
 .type __scheduler_switch, STT_FUNC;
 __scheduler_switch:
 	LINK 0;
-	save_context_no_interrupts
+	[--SP] = R7;
+	CLI R7; //disable all interrupts
+	SAVE_CONTEXT;
 
 	//get the highest priority task
 	P0.H = _active_tasks;
@@ -153,8 +154,10 @@ __scheduler_switch:
 	R0.L = SCHEDULER_IRQ_Num;
 	[P0] = R0;
 
-	restore_context_no_interrupts
- 	UNLINK; /* restore SP, FP, and RETS */
+	RESTORE_CONTEXT;
+	STI R7; //re-enable interrupts
+	R7 = [SP++];
+ 	UNLINK;
  	RTS;
 
 

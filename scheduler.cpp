@@ -28,6 +28,7 @@ bool Scheduler::begin()
 
 bool Scheduler::addTask(void (*fn)(void), uint8_t prio)
 {
+	SCHEDULER_CRIT_ENTRY;
 	//make this prio level isn't already taken
 	if(active_tasks & (SCHEDULER_TASK_ACTIVE << (prio << 1))) return SCHEDULER_ERR_DUPLICATE_PRIO;
 	else{
@@ -35,6 +36,7 @@ bool Scheduler::addTask(void (*fn)(void), uint8_t prio)
 		scheduler_tasks[prio] = (volatile void(*)(void))fn;
 	}
 	raiseIRQ(SCHEDULER_IRQ_Num);
+	SCHEDULER_CRIT_EXIT;
 }
 
 extern "C" {
