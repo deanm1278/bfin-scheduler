@@ -10,7 +10,7 @@
 volatile uint32_t active_tasks;
 volatile void (*scheduler_tasks[SCHEDULER_MAX_TASKS])( void );
 
-static uint32_t scheduler_return;
+volatile uint32_t scheduler_return;
 
 bool Scheduler::begin()
 {
@@ -48,11 +48,7 @@ int SCHEDULER_Handler( int IQR_NUM )
 	//find the highest priority interrupt
 	int highest = (31 - __builtin_clz(active_tasks & SCHEDULER_ACTIVE_MASK));
 
-	if(highest == -1 && scheduler_return != NULL){
-		//nothing left to run. restore the global return address
-		__asm__ volatile("RETI = %0;" : : "r"(scheduler_return));
-	}
-	else if( !(active_tasks & (SCHEDULER_TASK_BEGUN << highest)) )
+	if( !(active_tasks & (SCHEDULER_TASK_BEGUN << highest)) )
 	{
 		//save the global scheduler return address if there is none
 		if(scheduler_return == NULL){

@@ -91,6 +91,9 @@
 
 .global ___clzsi2;
 
+.extern _scheduler_return;
+.type _scheduler_return,STT_OBJECT;
+
 .extern _active_tasks;
 .type _active_tasks,STT_OBJECT;
 
@@ -99,9 +102,9 @@
 .type __scheduler_switch, STT_FUNC;
 __scheduler_switch:
 	LINK 0;
-	[--SP] = R7;
-	CLI R7; //disable all interrupts
 	SAVE_CONTEXT;
+
+	CLI R7; //disable all interrupts
 
 	//get the highest priority task
 	P0.H = _active_tasks;
@@ -122,7 +125,11 @@ __scheduler_switch:
 	P1 = P1 + (P0 << 1);
 	P0 = [P1];
 
+	STI R7; //re-enable interrupts
+
 	CALL (P0);
+
+	CLI R7; //disable all interrupts
 
 	//clear the flags for this task
 
@@ -147,6 +154,9 @@ __scheduler_switch:
 	R0 = R2 & R3; //or the result with the original value
 	[P0] = R0; //clear both the active and running bits in the highest priority task
 
+	CC = R0 == 0x0;
+	IF CC JUMP(scheduler_end);
+
 	//raise the interrupt to call the scheduler
 	P0.H = HI(REG_SEC_Global_SEC0_RAISE);
 	P0.L = LO(REG_SEC_Global_SEC0_RAISE);
@@ -154,12 +164,31 @@ __scheduler_switch:
 	R0.L = SCHEDULER_IRQ_Num;
 	[P0] = R0;
 
-	RESTORE_CONTEXT;
 	STI R7; //re-enable interrupts
-	R7 = [SP++];
+
+	RESTORE_CONTEXT;
  	UNLINK;
  	RTS;
 
+scheduler_end:
+	STI R7; //re-enable interrupts
+
+	RESTORE_CONTEXT;
+ 	UNLINK;
+
+	[--SP] = R0;
+	[--SP] = P0;
+
+	//set the return address back to where we left off originally
+	P0.H = _scheduler_return;
+	P0.L = _scheduler_return;
+	R0 = [P0];
+
+	RETS = R0;
+
+	P0 = [SP++];
+	R0 = [SP++];
+ 	RTS;
 
 
 
