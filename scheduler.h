@@ -10,6 +10,9 @@
 
 #define SCHEDULER_IRQ_Num 89 //SYS_SOFT3_IRQ_Num
 
+#define SCHEDULER_ACTIVE_MASK 0x55555555
+#define SCHEDULER_RUNNING_MASK ~(SCHEDULER_ACTIVE_MASK)
+
 #if !defined(__ASSEMBLY__)
 
 #include <Arduino.h>
@@ -17,12 +20,10 @@
 #define SCHEDULER_Handler SYS_SOFT3_INT_Handler
 
 #define SCHEDULER_MAX_TASKS 16
-#define SCHEDULER_MAX_PRIO SCHEDULER_MAX_TASKS
+#define SCHEDULER_MAX_PRIO (SCHEDULER_MAX_TASKS - 1)
 
 #define SCHEDULER_TASK_ACTIVE 0x01UL
 #define SCHEDULER_TASK_BEGUN 0x02UL
-
-#define SCHEDULER_ACTIVE_MASK 0x55555555
 
 /* For now lets assume we can't switch to a new task
  * while inside a critical section.

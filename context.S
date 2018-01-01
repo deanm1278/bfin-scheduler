@@ -91,31 +91,55 @@
 
 .global ___clzsi2;
 
-.extern _scheduler_return;
-.type _scheduler_return,STT_OBJECT;
-
 .extern _active_tasks;
 .type _active_tasks,STT_OBJECT;
+
+.extern _clobbered_reti;
+.type _clobbered_reti,STT_OBJECT;
 
 .align 2
 .global __scheduler_switch;
 .type __scheduler_switch, STT_FUNC;
 __scheduler_switch:
+	[--SP] = R0;
+	[--SP] = P0;
+
+	//make sure we return to the right spot
+	P0.H = _clobbered_reti;
+	P0.L = _clobbered_reti;
+	R0 = [P0];
+
+	RETS = R0;
+
+	P0 = [SP++];
+	R0 = [SP++];
+
 	LINK 0;
 	SAVE_CONTEXT;
 
-	CLI R7; //disable all interrupts
+	//CLI R7;
 
+scheduler_start:
 	//get the highest priority task
-	P0.H = _active_tasks;
-	P0.L = _active_tasks;
-	R0 = [P0];
+	P1.H = _active_tasks;
+	P1.L = _active_tasks;
+	R0 = [P1];
+	R2 = R0;
+	[--SP] = P1;
 
 	CALL ___clzsi2;
 
-	R1 = 30 (X);
+	R1 = 31 (X);
 	R0 = R1 - R0;
 	P0 = R0;
+
+	R1 = 3 (X);
+	R1 <<= R0;
+	R0 = R2 | R1;
+
+	//mark the task as begun
+	P1 = [SP++];
+	[P1] = R0;
 
 	//call the task function
 	.extern _scheduler_tasks;
@@ -125,11 +149,11 @@ __scheduler_switch:
 	P1 = P1 + (P0 << 1);
 	P0 = [P1];
 
-	STI R7; //re-enable interrupts
+	//STI R7;
 
 	CALL (P0);
 
-	CLI R7; //disable all interrupts
+	//CLI R7;
 
 	//clear the flags for this task
 
@@ -153,42 +177,43 @@ __scheduler_switch:
 	R2 = R1 ^ R2; //clear the 2 bits
 	R0 = R2 & R3; //or the result with the original value
 	[P0] = R0; //clear both the active and running bits in the highest priority task
+	R3 = R0;
 
 	CC = R0 == 0x0;
-	IF CC JUMP(scheduler_end);
+	IF CC JUMP(task_exit);
+	CSYNC;
 
-	//raise the interrupt to call the scheduler
-	P0.H = HI(REG_SEC_Global_SEC0_RAISE);
-	P0.L = LO(REG_SEC_Global_SEC0_RAISE);
-	R0.H = 0;
-	R0.L = SCHEDULER_IRQ_Num;
-	[P0] = R0;
+	//mask off tasks that are already begun
+	R2.H = HI(SCHEDULER_RUNNING_MASK);
+	R2.L = LO(SCHEDULER_RUNNING_MASK);
+	R0 = R0 & R2;
 
-	STI R7; //re-enable interrupts
+	CALL ___clzsi2;
+
+	//get the highest priority task that has already begun
+	R1 = 32 (X);
+	R0 = R1 - R0;
+
+	R2.H = 0xFFFF;
+	R2.L = 0xFFFF;
+
+	R2 <<= R0;
+	//mask highest prio running task and everything below
+	R0 = R3 & R2;
+
+	//a middle priority task has been added and needs to run
+	CC = R0 == 0x0;
+	IF CC JUMP(task_exit);
+
+	JUMP (scheduler_start);
+	CSYNC;
+
+task_exit:
+	//STI R7;
 
 	RESTORE_CONTEXT;
  	UNLINK;
- 	RTS;
-
-scheduler_end:
-	STI R7; //re-enable interrupts
-
-	RESTORE_CONTEXT;
- 	UNLINK;
-
-	[--SP] = R0;
-	[--SP] = P0;
-
-	//set the return address back to where we left off originally
-	P0.H = _scheduler_return;
-	P0.L = _scheduler_return;
-	R0 = [P0];
-
-	RETS = R0;
-
-	P0 = [SP++];
-	R0 = [SP++];
- 	RTS;
+	RTS;
 
 
 
