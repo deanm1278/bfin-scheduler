@@ -13,6 +13,8 @@
 #include <bf706_device.h>
 #include "scheduler.h"
 
+#define DISABLE_INTERRUPTS 1
+
 #define SAVE_CONTEXT \
 	[--sp] = ( R7:0, P5:0 ); \
 	\
@@ -104,6 +106,16 @@ __scheduler_switch:
 	[--SP] = R0;
 	[--SP] = P0;
 
+#if DISABLE_INTERRUPTS
+	P0.H = HI(REG_ICU_IMASK);
+	P0.L = LO(REG_ICU_IMASK);
+
+	R0 = [P0];
+	BITCLR(R0, 11);
+
+	[P0] = R0;
+#endif
+
 	//make sure we return to the right spot
 	P0.H = _clobbered_reti;
 	P0.L = _clobbered_reti;
@@ -116,8 +128,6 @@ __scheduler_switch:
 
 	LINK 0;
 	SAVE_CONTEXT;
-
-	//CLI R7;
 
 scheduler_start:
 	//get the highest priority task
@@ -149,11 +159,27 @@ scheduler_start:
 	P1 = P1 + (P0 << 1);
 	P0 = [P1];
 
-	//STI R7;
+#if DISABLE_INTERRUPTS
+	P1.H = HI(REG_ICU_IMASK);
+	P1.L = LO(REG_ICU_IMASK);
+
+	R0 = [P1];
+	BITSET(R0, 11);
+
+	[P1] = R0;
+#endif
 
 	CALL (P0);
 
-	//CLI R7;
+#if DISABLE_INTERRUPTS
+	P0.H = HI(REG_ICU_IMASK);
+	P0.L = LO(REG_ICU_IMASK);
+
+	R0 = [P0];
+	BITCLR(R0, 11);
+
+	[P0] = R0;
+#endif
 
 	//clear the flags for this task
 
@@ -209,7 +235,14 @@ scheduler_start:
 	CSYNC;
 
 task_exit:
-	//STI R7;
+#if DISABLE_INTERRUPTS
+	P0.H = HI(REG_ICU_IMASK);
+	P0.L = LO(REG_ICU_IMASK);
+
+	R0 = [P0];
+	BITSET(R0, 11);
+	[P0] = R0;
+#endif
 
 	RESTORE_CONTEXT;
  	UNLINK;
