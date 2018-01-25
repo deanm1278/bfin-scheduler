@@ -13,11 +13,11 @@
 #define SCHEDULER_ACTIVE_MASK 0x55555555
 #define SCHEDULER_RUNNING_MASK ~(SCHEDULER_ACTIVE_MASK)
 
+#define SCHEDULER_Handler _SYS_SOFT3_INT_Handler
+
 #if !defined(__ASSEMBLY__)
 
 #include <Arduino.h>
-
-#define SCHEDULER_Handler SYS_SOFT3_INT_Handler
 
 #define SCHEDULER_MAX_TASKS 16
 #define SCHEDULER_MAX_PRIO (SCHEDULER_MAX_TASKS - 1)

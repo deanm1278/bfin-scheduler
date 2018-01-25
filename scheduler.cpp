@@ -10,10 +10,14 @@
 volatile uint32_t active_tasks;
 volatile void (*scheduler_tasks[SCHEDULER_MAX_TASKS])( void );
 
-volatile uint32_t clobbered_reti;
+extern "C" {
+extern void _scheduler_setup( void );
+};
 
 bool Scheduler::begin()
 {
+	_scheduler_setup();
+
 	disableIRQ(SCHEDULER_IRQ_Num);
 	setIRQPriority(SCHEDULER_IRQ_Num, 0); //Lowest priority
 	enableIRQ(SCHEDULER_IRQ_Num);
@@ -39,14 +43,19 @@ bool Scheduler::addTask(void (*fn)(void), uint8_t prio)
 	}
 	raiseIRQ(SCHEDULER_IRQ_Num);
 	SCHEDULER_CRIT_EXIT;
+	__asm__ volatile("IDLE");
+	return 0;
 }
+
+#if 0
 
 extern "C" {
 
-extern void _scheduler_switch( void );
+//extern void _scheduler_switch( void );
 
 int SCHEDULER_Handler( int IQR_NUM )
 {
+#if 0
 	//find the highest priority task
 	int highest = (31 - __builtin_clz(active_tasks & SCHEDULER_ACTIVE_MASK));
 
@@ -63,6 +72,7 @@ int SCHEDULER_Handler( int IQR_NUM )
 	//otherwise the highest priority task is already running and was interrupted
 
 	return IQR_NUM;
+#endif
 }
-
 };
+#endif

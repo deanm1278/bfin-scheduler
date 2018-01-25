@@ -17,22 +17,23 @@
 
 #define SAVE_CONTEXT \
 	[--sp] = ( R7:0, P5:0 ); \
-	\
+	[--sp] = fp; \
+\
 	[--sp] = i0; \
 	[--sp] = i1; \
 	[--sp] = i2; \
 	[--sp] = i3; \
-	\
+\
 	[--sp] = m0; \
 	[--sp] = m1; \
 	[--sp] = m2; \
 	[--sp] = m3; \
-	\
+\
 	[--sp] = l0; \
 	[--sp] = l1; \
 	[--sp] = l2; \
 	[--sp] = l3; \
-	\
+\
 	[--sp] = b0; \
 	[--sp] = b1; \
 	[--sp] = b2; \
@@ -41,30 +42,34 @@
 	[--sp] = a0.w; \
 	[--sp] = a1.x; \
 	[--sp] = a1.w; \
-	\
+\
 	[--sp] = LC0; \
 	[--sp] = LC1; \
 	[--sp] = LT0; \
 	[--sp] = LT1; \
 	[--sp] = LB0; \
 	[--sp] = LB1; \
-	\
+\
 	[--sp] = ASTAT; \
+\
+	[--sp] = RETI; \
 	[--sp] = SEQSTAT; \
-	[--sp] = SYSCFG
+	[--sp] = SYSCFG; \
 
 #define RESTORE_CONTEXT \
 	SYSCFG = [sp++]; \
 	SEQSTAT = [sp++]; \
+	RETI = [sp++]; \
+\
 	ASTAT = [sp++]; \
-	 \
+\
 	LB1 = [sp++]; \
 	LB0 = [sp++]; \
 	LT1 = [sp++]; \
 	LT0 = [sp++]; \
 	LC1 = [sp++]; \
 	LC0 = [sp++]; \
-	 \
+\
 	a1.w = [sp++]; \
 	a1.x = [sp++]; \
 	a0.w = [sp++]; \
@@ -73,104 +78,52 @@
 	b2 = [sp++]; \
 	b1 = [sp++]; \
 	b0 = [sp++]; \
-	 \
+\
 	l3 = [sp++]; \
 	l2 = [sp++]; \
 	l1 = [sp++]; \
 	l0 = [sp++]; \
-	 \
+\
 	m3 = [sp++]; \
 	m2 = [sp++]; \
 	m1 = [sp++]; \
 	m0 = [sp++]; \
-	 \
+\
 	i3 = [sp++]; \
 	i2 = [sp++]; \
 	i1 = [sp++]; \
 	i0 = [sp++]; \
-	 \
-	( R7 : 0, P5 : 0) = [ SP ++ ]
+\
+	fp = [sp++]; \
+\
+	( R7 : 0, P5 : 0) = [ SP ++ ];
 
 .global ___clzsi2;
 
-.extern _active_tasks;
-.type _active_tasks,STT_OBJECT;
+.align 2
+.global __scheduler_setup;
+.type __scheduler_setup, STT_FUNC;
+__scheduler_setup:
+	LINK 0;
+	[--SP] = P0;
+	[--SP] = R1;
 
-.extern _clobbered_reti;
-.type _clobbered_reti,STT_OBJECT;
+	//Set handler for IVG15
+	P0.H = HI(REG_ICU_EVT15);
+	P0.L = LO(REG_ICU_EVT15);
+	R1.L = __scheduler_dispatch
+	R1.H = __scheduler_dispatch
+	[P0] = R1;
+
+	R1 = [SP++];
+	P0 = [SP++];
+	UNLINK;
+	RTS;
 
 .align 2
-.global __scheduler_switch;
-.type __scheduler_switch, STT_FUNC;
-__scheduler_switch:
-	[--SP] = R0;
-	[--SP] = P0;
-
-#if DISABLE_INTERRUPTS
-	P0.H = HI(REG_ICU_IMASK);
-	P0.L = LO(REG_ICU_IMASK);
-
-	R0 = [P0];
-	BITCLR(R0, 11);
-
-	[P0] = R0;
-#endif
-
-	//make sure we return to the right spot
-	P0.H = _clobbered_reti;
-	P0.L = _clobbered_reti;
-	R0 = [P0];
-
-	RETS = R0;
-
-	P0 = [SP++];
-	R0 = [SP++];
-
-	LINK 0;
-	SAVE_CONTEXT;
-
-scheduler_start:
-	//get the highest priority task
-	P1.H = _active_tasks;
-	P1.L = _active_tasks;
-	R0 = [P1];
-	R2 = R0;
-	[--SP] = P1;
-
-	CALL ___clzsi2;
-
-	R1 = 31 (X);
-	R0 = R1 - R0;
-	P0 = R0;
-
-	R1 = 3 (X);
-	R1 <<= R0;
-	R0 = R2 | R1;
-
-	//mark the task as begun
-	P1 = [SP++];
-	[P1] = R0;
-
-	//call the task function
-	.extern _scheduler_tasks;
-	.type _scheduler_tasks,STT_OBJECT;
-	P1.H = _scheduler_tasks;
-	P1.L = _scheduler_tasks;
-	P1 = P1 + (P0 << 1);
-	P0 = [P1];
-
-#if DISABLE_INTERRUPTS
-	P1.H = HI(REG_ICU_IMASK);
-	P1.L = LO(REG_ICU_IMASK);
-
-	R0 = [P1];
-	BITSET(R0, 11);
-
-	[P1] = R0;
-#endif
-
-	CALL (P0);
-
+.global __scheduler_dispatch;
+.type __scheduler_dispatch, STT_FUNC;
+__scheduler_dispatch:
 #if DISABLE_INTERRUPTS
 	P0.H = HI(REG_ICU_IMASK);
 	P0.L = LO(REG_ICU_IMASK);
@@ -231,8 +184,10 @@ scheduler_start:
 	CC = R0 == 0x0;
 	IF CC JUMP(task_exit);
 
+#if 0
 	JUMP (scheduler_start);
 	CSYNC;
+#endif
 
 task_exit:
 #if DISABLE_INTERRUPTS
@@ -245,9 +200,95 @@ task_exit:
 #endif
 
 	RESTORE_CONTEXT;
- 	UNLINK;
+	RETS = [SP++];
+	RTI;
+
+.extern _active_tasks;
+.type _active_tasks,STT_OBJECT;
+
+.align 2
+.global SCHEDULER_Handler;
+.type SCHEDULER_Handler, STT_FUNC;
+SCHEDULER_Handler:
+
+	//pop off what the dispatcher saved and save context
+	ASTAT = [SP++]; ( R7 : 0, P5 : 0) = [ SP ++ ];
+
+	SAVE_CONTEXT;
+	LINK 0;
+
+#if DISABLE_INTERRUPTS
+	P0.H = HI(REG_ICU_IMASK);
+	P0.L = LO(REG_ICU_IMASK);
+
+	R1 = [P0];
+	BITCLR(R1, 11);
+
+	[P0] = R1;
+#endif
+
+	//get the highest priority task
+	P1.H = _active_tasks;
+	P1.L = _active_tasks;
+	R0 = [P1];
+	R1 = R0;
+	[--SP] = P1;
+
+	CALL ___clzsi2;
+
+	R3 = 31 (X);
+	R0 = R3 - R0;
+	P0 = R0;
+
+	R3 = 3 (X);
+	R3 <<= R0;
+	R1 = R3 | R1;
+
+	//mark the task as begun
+	P1 = [SP++];
+	[P1] = R1;
+
+	//get the task function
+	.extern _scheduler_tasks;
+	.type _scheduler_tasks,STT_OBJECT;
+	P1.H = _scheduler_tasks;
+	P1.L = _scheduler_tasks;
+	P1 = P1 + (P0 << 1);
+	R0 = [P1];
+
+	//set RETI to new task
+	RETI = R0;
+
+	R0.H = _scheduler_end;
+	R0.L = _scheduler_end;
+
+	UNLINK;
+	//These will get popped off when return to normal thread
+	//push R0 in place of RETS
+	[--sp] = ( R7:0, P5:0 );  [--SP] = ASTAT;  [--SP] = R0;
+
+#if DISABLE_INTERRUPTS
+	P0.H = HI(REG_ICU_IMASK);
+	P0.L = LO(REG_ICU_IMASK);
+
+	R1 = [P0];
+	BITSET(R1, 11);
+
+	[P0] = R1;
+#endif
+
+	R0.H = 0x00;
+	R0.L = SCHEDULER_IRQ_Num;
+
 	RTS;
 
+
+.align 2
+.global _scheduler_end;
+.type _scheduler_end, STT_FUNC;
+_scheduler_end:
+	RAISE 15;
+	IDLE;
 
 
 
