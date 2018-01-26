@@ -13,10 +13,10 @@
 #include <bf706_device.h>
 #include "scheduler.h"
 
-#define DISABLE_INTERRUPTS 1
-
 #define SAVE_CONTEXT \
 	[--sp] = ( R7:0, P5:0 ); \
+	R0 = RETI; \
+	[--sp] = R0; \
 	[--sp] = fp; \
 \
 	[--sp] = i0; \
@@ -52,14 +52,14 @@
 \
 	[--sp] = ASTAT; \
 \
-	[--sp] = RETI; \
+	[--sp] = RETS; \
 	[--sp] = SEQSTAT; \
 	[--sp] = SYSCFG; \
 
 #define RESTORE_CONTEXT \
 	SYSCFG = [sp++]; \
 	SEQSTAT = [sp++]; \
-	RETI = [sp++]; \
+	RETS = [sp++]; \
 \
 	ASTAT = [sp++]; \
 \
@@ -95,6 +95,8 @@
 	i0 = [sp++]; \
 \
 	fp = [sp++]; \
+	R0 = [sp++]; \
+	RETI = R0; \
 \
 	( R7 : 0, P5 : 0) = [ SP ++ ];
 
@@ -109,10 +111,17 @@ __scheduler_setup:
 	[--SP] = R1;
 
 	//Set handler for IVG15
-	P0.H = HI(REG_ICU_EVT15);
-	P0.L = LO(REG_ICU_EVT15);
+	P0.H = HI(REG_ICU_EVT13);
+	P0.L = LO(REG_ICU_EVT13);
 	R1.L = __scheduler_dispatch
 	R1.H = __scheduler_dispatch
+	[P0] = R1;
+
+	//Set handler for IVG15
+	P0.H = HI(REG_ICU_EVT14);
+	P0.L = LO(REG_ICU_EVT14);
+	R1.L = __scheduler_start
+	R1.H = __scheduler_start
 	[P0] = R1;
 
 	R1 = [SP++];
@@ -124,15 +133,6 @@ __scheduler_setup:
 .global __scheduler_dispatch;
 .type __scheduler_dispatch, STT_FUNC;
 __scheduler_dispatch:
-#if DISABLE_INTERRUPTS
-	P0.H = HI(REG_ICU_IMASK);
-	P0.L = LO(REG_ICU_IMASK);
-
-	R0 = [P0];
-	BITCLR(R0, 11);
-
-	[P0] = R0;
-#endif
 
 	//clear the flags for this task
 
@@ -184,55 +184,35 @@ __scheduler_dispatch:
 	CC = R0 == 0x0;
 	IF CC JUMP(task_exit);
 
-#if 0
-	JUMP (scheduler_start);
+	JUMP (task_start);
 	CSYNC;
-#endif
 
 task_exit:
-#if DISABLE_INTERRUPTS
-	P0.H = HI(REG_ICU_IMASK);
-	P0.L = LO(REG_ICU_IMASK);
-
-	R0 = [P0];
-	BITSET(R0, 11);
-	[P0] = R0;
-#endif
-
 	RESTORE_CONTEXT;
-	RETS = [SP++];
 	RTI;
 
 .extern _active_tasks;
 .type _active_tasks,STT_OBJECT;
 
 .align 2
-.global SCHEDULER_Handler;
-.type SCHEDULER_Handler, STT_FUNC;
-SCHEDULER_Handler:
-
-	//pop off what the dispatcher saved and save context
-	ASTAT = [SP++]; ( R7 : 0, P5 : 0) = [ SP ++ ];
+.global __scheduler_start;
+.type __scheduler_start, STT_FUNC;
+__scheduler_start:
 
 	SAVE_CONTEXT;
-	LINK 0;
 
-#if DISABLE_INTERRUPTS
-	P0.H = HI(REG_ICU_IMASK);
-	P0.L = LO(REG_ICU_IMASK);
-
-	R1 = [P0];
-	BITCLR(R1, 11);
-
-	[P0] = R1;
-#endif
+task_start:
 
 	//get the highest priority task
 	P1.H = _active_tasks;
 	P1.L = _active_tasks;
 	R0 = [P1];
 	R1 = R0;
+	R2.H = HI(SCHEDULER_ACTIVE_MASK);
+	R2.L = LO(SCHEDULER_ACTIVE_MASK);
+	R0 = R0 & R2;
 	[--SP] = P1;
+	[--SP] = R1;
 
 	CALL ___clzsi2;
 
@@ -242,6 +222,13 @@ SCHEDULER_Handler:
 
 	R3 = 3 (X);
 	R3 <<= R0;
+	R1 = [SP++];
+
+	R2 = R3 & R1;
+	R2 >>= R0;
+	CC = R2 == 0x3;
+	IF CC JUMP(task_return);
+
 	R1 = R3 | R1;
 
 	//mark the task as begun
@@ -262,33 +249,19 @@ SCHEDULER_Handler:
 	R0.H = _scheduler_end;
 	R0.L = _scheduler_end;
 
-	UNLINK;
-	//These will get popped off when return to normal thread
-	//push R0 in place of RETS
-	[--sp] = ( R7:0, P5:0 );  [--SP] = ASTAT;  [--SP] = R0;
+	RETS = R0;
 
-#if DISABLE_INTERRUPTS
-	P0.H = HI(REG_ICU_IMASK);
-	P0.L = LO(REG_ICU_IMASK);
-
-	R1 = [P0];
-	BITSET(R1, 11);
-
-	[P0] = R1;
-#endif
-
-	R0.H = 0x00;
-	R0.L = SCHEDULER_IRQ_Num;
-
-	RTS;
+task_return:
+	RTI;
 
 
 .align 2
 .global _scheduler_end;
 .type _scheduler_end, STT_FUNC;
 _scheduler_end:
-	RAISE 15;
+	RAISE 13;
 	IDLE;
+	CSYNC;
 
 
 

@@ -8,12 +8,8 @@
 #ifndef BFIN_SCHEDULER_SCHEDULER_H_
 #define BFIN_SCHEDULER_SCHEDULER_H_
 
-#define SCHEDULER_IRQ_Num 89 //SYS_SOFT3_IRQ_Num
-
 #define SCHEDULER_ACTIVE_MASK 0x55555555
 #define SCHEDULER_RUNNING_MASK ~(SCHEDULER_ACTIVE_MASK)
-
-#define SCHEDULER_Handler _SYS_SOFT3_INT_Handler
 
 #if !defined(__ASSEMBLY__)
 
@@ -27,9 +23,10 @@
 
 /* For now lets assume we can't switch to a new task
  * while inside a critical section.
+ * TODO:
  */
-#define SCHEDULER_CRIT_ENTRY disableIRQ(SCHEDULER_IRQ_Num)
-#define SCHEDULER_CRIT_EXIT enableIRQ(SCHEDULER_IRQ_Num)
+#define SCHEDULER_CRIT_ENTRY
+#define SCHEDULER_CRIT_EXIT
 
 enum {
 	SCHEDULER_ERR_SUCCESS = 0,
