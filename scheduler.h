@@ -25,8 +25,13 @@
  * while inside a critical section.
  * TODO:
  */
-#define SCHEDULER_CRIT_ENTRY
-#define SCHEDULER_CRIT_EXIT
+#define SCHEDULER_CRIT_ENTRY  _crit_entry
+#define SCHEDULER_CRIT_EXIT	  _crit_exit
+
+extern "C" {
+	extern void _crit_entry( void );
+	extern void _crit_exit( void );
+};
 
 enum {
 	SCHEDULER_ERR_SUCCESS = 0,

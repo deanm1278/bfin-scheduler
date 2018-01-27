@@ -27,7 +27,6 @@ bool Scheduler::begin()
 
 bool Scheduler::addTask(void (*fn)(void), uint8_t prio)
 {
-	SCHEDULER_CRIT_ENTRY;
 	//make this prio level isn't already taken
 	if(active_tasks & (SCHEDULER_TASK_ACTIVE << (prio << 1))){
 		__asm__ volatile("EMUEXCPT;");
@@ -37,7 +36,6 @@ bool Scheduler::addTask(void (*fn)(void), uint8_t prio)
 		active_tasks |= (SCHEDULER_TASK_ACTIVE << (prio << 1));
 		scheduler_tasks[prio] = (volatile void(*)(void))fn;
 	}
-	SCHEDULER_CRIT_EXIT;
 	__asm__ volatile("RAISE 14;");
 	return 0;
 }

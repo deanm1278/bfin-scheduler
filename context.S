@@ -262,6 +262,45 @@ _scheduler_end:
 	IDLE;
 	CSYNC;
 
+.align 2
+.global __crit_entry;
+.type __crit_entry, STT_FUNC;
+__crit_entry:
+	LINK 0;
+	[--SP] = P0;
+	[--SP] = R0;
+
+	P0.H = HI(REG_ICU_IMASK);
+	P0.L = LO(REG_ICU_IMASK);
+	R0 = [P0];
+	BITCLR(R0, 14);
+	BITCLR(R0, 13);
+	[P0] = R0;
+
+	R0 = [SP++];
+	P0 = [SP++];
+	UNLINK;
+	RTS;
+
+.align 2
+.global __crit_exit;
+.type __crit_exit, STT_FUNC;
+__crit_exit:
+	LINK 0;
+	[--SP] = P0;
+	[--SP] = R0;
+
+	P0.H = HI(REG_ICU_IMASK);
+	P0.L = LO(REG_ICU_IMASK);
+	R0 = [P0];
+	BITSET(R0, 14);
+	BITSET(R0, 13);
+	[P0] = R0;
+
+	R0 = [SP++];
+	P0 = [SP++];
+	UNLINK;
+	RTS;
 
 
 
