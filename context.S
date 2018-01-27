@@ -159,7 +159,7 @@ __scheduler_dispatch:
 	R3 = R0;
 
 	CC = R0 == 0x0;
-	IF CC JUMP(task_exit);
+	IF CC JUMP(task_resume);
 	CSYNC;
 
 	//mask off tasks that are already begun
@@ -182,12 +182,12 @@ __scheduler_dispatch:
 
 	//a middle priority task has been added and needs to run
 	CC = R0 == 0x0;
-	IF CC JUMP(task_exit);
+	IF CC JUMP(task_resume);
 
 	JUMP (task_start);
 	CSYNC;
 
-task_exit:
+task_resume:
 	RESTORE_CONTEXT;
 	RTI;
 
@@ -211,7 +211,6 @@ task_start:
 	R2.H = HI(SCHEDULER_ACTIVE_MASK);
 	R2.L = LO(SCHEDULER_ACTIVE_MASK);
 	R0 = R0 & R2;
-	[--SP] = P1;
 	[--SP] = R1;
 
 	CALL ___clzsi2;
@@ -227,12 +226,13 @@ task_start:
 	R2 = R3 & R1;
 	R2 >>= R0;
 	CC = R2 == 0x3;
-	IF CC JUMP(task_return);
+	IF CC JUMP(task_resume);
 
 	R1 = R3 | R1;
 
 	//mark the task as begun
-	P1 = [SP++];
+	P1.H = _active_tasks;
+	P1.L = _active_tasks;
 	[P1] = R1;
 
 	//get the task function
@@ -251,7 +251,6 @@ task_start:
 
 	RETS = R0;
 
-task_return:
 	RTI;
 
 
