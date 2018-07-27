@@ -183,9 +183,9 @@ __scheduler_dispatch:
 	//a middle priority task has been added and needs to run
 	CC = R0 == 0x0;
 	IF CC JUMP(task_resume);
+	CSYNC;
 
 	JUMP (task_start);
-	CSYNC;
 
 task_resume:
 	RESTORE_CONTEXT;
@@ -259,7 +259,6 @@ task_start:
 .type _scheduler_end, STT_FUNC;
 _scheduler_end:
 	RAISE 13;
-	IDLE;
 	CSYNC;
 
 .align 2

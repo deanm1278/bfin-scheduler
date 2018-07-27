@@ -6,7 +6,8 @@ Scheduler sch;
 //define priorities for our tasks
 enum {
   PRIO_TASK_0 = 0,
-  PRIO_TASK_1 = 1
+  PRIO_TASK_1 = 1,
+  PRIO_TASK_2 = 2,
 };
 
 void task0( void ){
@@ -18,6 +19,13 @@ void task0( void ){
 }
 
 void task1( void ){
+  for(int i=57; i>55; i--){
+    Serial.println(i);
+    delay(1000);
+  }
+}
+
+void task2( void ){
   Serial.println("preempted!");
 }
 
@@ -45,10 +53,18 @@ void loop() {
 extern "C" {
   /* When this interrupt is triggered, a higher priority task will be
    * added. This will preempt lower priority task0.
+   *
+   * Make sure UART1_STAT_Handler isn't defined anywhere else
    */
-  int UART0_STAT_Handler( int IQR_NUM ){
-    sch.addTask(task1, PRIO_TASK_1);
+  int UART1_STAT_Handler( int IQR_NUM ){
+	Serial.IrqHandler();
+	if(Serial.available()){
+		char c = Serial.read();
+		if(c == 'a')
+			sch.addTask(task1, PRIO_TASK_1);
+		else if(c == 's')
+			sch.addTask(task2, PRIO_TASK_2);
+	}
     return IQR_NUM;
   }
 }
-
